@@ -1,0 +1,52 @@
+  /*System.out.println(load);
+  if(load==0) //server just got started
+  {
+   try
+   {
+    File file=new File("UserDatabase.json");
+    if(file.exists())
+    {
+     RandomAccessFile raf=new RandomAccessFile(file,"rw");
+     String json=raf.readLine();
+     System.out.println(json);
+     users=(ConcurrentHashMap)gson.fromJson(json,ConcurrentHashMap.class);
+     for(Map.Entry<String,UserBean> entry : users.entrySet())
+     {
+      UserSessionBean usb=new UserSessionBean();
+      usb.setUserName(entry.getValue().getUserName());
+      userSessions.put(entry.getKey(),usb);
+      System.out.println(entry.getKey());
+     }
+     load=1;
+    }
+    else
+    {
+     System.out.println("File does not exists");
+     users=new ConcurrentHashMap<>();
+     userSessions=new ConcurrentHashMap<>();
+     load=1;
+    }
+   }catch(Exception e)
+   {
+    System.out.println(e);
+    users=new ConcurrentHashMap<>();
+    userSessions=new ConcurrentHashMap<>();
+    load=1;
+   }
+  }*/
+
+  try
+  {
+   List<UserSessionBean> ls=new ArrayList<UserSessionBean>(userSessions.values());
+   Collections.sort(ls);
+   UserListBean userList=new UserListBean(); 
+   List<String> l=new ArrayList<>();
+   for(UserSessionBean k:ls)
+   {
+    if(k.getIsOnline()) l.add(0,"1"+k.getUserName());
+    else l.add(0,"0"+k.getUserName());
+   }
+   userList.setUserList(l);
+   for(Map.Entry<String,UserSessionBean> entry : userSessions.entrySet())
+    if(entry.getValue().getIsOnline()) entry.getValue().getSession().getBasicRemote().sendText(gson.toJson(userList));
+  }catch(Exception e){System.out.println(e);};

@@ -1,0 +1,411 @@
+<!doctype html>
+<html>
+    <link rel="stylesheet" href="bootstrap/css/bootstrap.min.css">
+    <head>
+        <div class='container-fluid'>
+            <div class="row shadow" style="background-color:#1d2023">
+                <div class="col-8">
+                    <h1 class='display-4' style="color:white;">
+                        <img src="assets/logo.png" style="margin-right: -30px;margin-left:20px; height: 50px;"></img>
+                        &nbsp;&nbsp;Let's Chat! 
+                    </h1>
+                </div>
+                <div class="col-2 text-right display-4" id="LoggedInUser" style="display:none; margin-top:22px; font-size: 25px; color:white;">
+                </div>
+                <div class="col-2 text-right" id="LogoutSave" style="display:none;">
+                    <img src="assets/save_icon.png" onclick="save()" style="margin-top: 18px;margin-right: 15px;"></img>
+                    <img src="assets/logout_icon.png" onclick="logout()" style="margin-top: 18px;"></img>
+                </div>
+            </div>
+        </div>
+    </head>
+    <script>
+        var webSocket;
+        var username;
+        var users=[];
+        var openedChat="";
+        
+        function UserBean(username,isOnline)
+        {
+            this.username=username;
+            this.isOnline=isOnline;
+        }
+
+        function MessageBean()
+        {
+            this.senderName="";
+            this.receiverName="";
+            this.message="";
+        }
+
+        function login()
+        {
+            var usernameInput=document.getElementById("username");
+            var passwordInput=document.getElementById("password");
+            username=usernameInput.value;
+            var password=passwordInput.value;
+            connect('',username,password);
+        }
+
+        function signup()
+        {
+            var emailInput=document.getElementById("signupemail");
+            var usernameInput=document.getElementById("signupusername");
+            var passwordInput=document.getElementById("signuppassword");
+            username=usernameInput.value;
+            var password=passwordInput.value;
+            var email=emailInput.value;
+            connect(email,username,password);
+        }
+
+        function connect(email,username,password)
+        {
+            if(email=='')
+            {
+                webSocket=new WebSocket("ws://localhost:8080/chat/first/{"+(username+"`"+password)+"}");
+            }
+            else
+            {
+                webSocket=new WebSocket("ws://localhost:8080/chat/first/{"+(email+"`"+username+"`"+password)+"}");
+            }
+            //document.getElementById("LoggedInUser").appendChild(document.createTextNode(username));
+            document.getElementById("LoggedInUser").innerHTML=username;
+            webSocket.onopen=function(response){ onOpen(response); };
+            webSocket.onmessage=function(response){ onMessage(response); };
+            webSocket.onclose=function(reponse){ onClose(response); };
+            webSocket.onerror=function(reponse){ onError(response); };
+        }
+        
+        function onOpen(response)
+        {
+        }
+
+        function onMessage(response)
+        {
+            var result=JSON.parse(response.data);
+            if(result.error)
+            {
+                if(result.error[0]=='l')
+                {
+                    if(result.error[1]=='u')
+                    {
+                        alert(result.error.substr(2,result.error.length));
+                    }
+                    else
+                    {
+                        alert(result.error.substr(2,result.error.length));
+                    }
+                }
+                else
+                {
+                    alert(result.error.substr(2,result.error.length));
+                }
+            }
+            if(result.userList)
+            {
+                clearFormInputs();
+                document.getElementById("LoginForm").style.display='none';
+                document.getElementById("SignUpForm").style.display='none';
+                document.getElementById("chatSection").style.display='block';
+                document.getElementById("LogoutSave").style.display="block";
+                document.getElementById("LoggedInUser").style.display="block";
+                var table=document.getElementById("AllUsers");
+                while(table.rows.length>0) table.deleteRow(0);
+                var i=0;
+                users=[]
+                for(i=0;i<result.userList.length;i++)
+                {
+                    if(result.userList[i].substr(1,result.userList[i].length)==username) continue;
+                    var tr=document.createElement("tr");
+                    var td,textNode,img;
+                    img=document.createElement("img");
+                    img.style.marginRight="10px";
+                    td=document.createElement("td");
+                    if(result.userList[i][0]=='1')
+                    {
+                        img.src="assets/online_user.png";
+                        users.push(new UserBean(result.userList[i].substr(1,result.userList[i].length),true));
+                        textNode=document.createTextNode(result.userList[i].substr(1,result.userList[i].length));
+                    }
+                    else
+                    {
+                        img.src="assets/offline_user.png";
+                        users.push(new UserBean(result.userList[i].substr(1,result.userList[i].length),false));
+                        textNode=document.createTextNode(result.userList[i].substr(1,result.userList[i].length));
+                    }
+                    td.appendChild(img);
+                    td.appendChild(textNode);
+                    var label=document.createElement("label");
+                    label.innerHTML="New Message";
+                    label.className="text-light bg-dark";
+                    label.style.borderRadius="10px";
+                    label.style.display="none";
+                    label.style.maxWidth="110px";
+                    label.id="NewMessage"+result.userList[i].substr(1,result.userList[i].length);
+                    tr.onclick=userClickHandler(tr,result.userList[i].substr(1,result.userList[i].length));
+                    tr.appendChild(td);
+                    tr.appendChild(document.createElement("td").appendChild(label));
+                    table.appendChild(tr);
+                }
+            }
+            if(result.chatMessages)
+            {
+                var table=document.getElementById("MessageTable");
+                var name=document.getElementById("OpenedChat");
+                if(name.rows.length>0) name.deleteRow(0);
+                while(table.rows.length>0) table.deleteRow(0);
+                var i=0;
+                var tr,td,th,textNode;
+                tr=document.createElement("tr");
+                td=document.createElement("td");
+                textNode=document.createTextNode(openedChat);
+                var img=document.createElement("img");
+                img.src="assets/offline_user.png";
+                img.style.marginRight="10px";
+                td.appendChild(img);
+                td.appendChild(textNode);   
+                tr.appendChild(td);
+                td.className="bg-dark";
+                name.appendChild(tr);
+                for(i=0;i<result.chatMessages.length;i++)
+                {
+                    tr=document.createElement("tr");
+                    td=document.createElement("td");
+                    textNode=document.createTextNode(result.chatMessages[i].message);
+                    if(result.chatMessages[i].senderName==username)
+                    {
+                        td.style.border="none";
+                        td.style.borderRadius="20px";
+                        td.style.color="white";
+                        td.className="bg-dark text-right mt-5";
+                    }
+                    else
+                    {
+                        td.style.borderRadius="20px";
+                        td.style.border="none";
+                        td.className="mt-5";
+                        td.style.backgroundColor=" #f4f6f6";
+                    }
+                    td.appendChild(textNode);
+                    tr.appendChild(td);
+                    table.appendChild(tr);
+                }
+                var tbl=document.getElementById("MessageTable");
+                if(tbl.rows.length>0)
+                tbl.rows[tbl.rows.length-1].scrollIntoView(true);
+            }
+            if(result.senderName)
+            {
+                if(result.senderName==username)
+                {
+                    var table=document.getElementById("MessageTable");
+                    var tr=document.createElement("tr");
+                    var td=document.createElement("td");
+                    var textNode=document.createTextNode(result.message);
+                    td.style.border="none";
+                    td.style.borderRadius="20px";
+                    td.style.color="white";
+                    td.className="bg-dark text-right";
+                    td.appendChild(textNode);
+                    tr.appendChild(td);
+                    table.appendChild(tr);
+                } 
+                else if(result.receiverName==username)
+                {
+                    if(result.senderName==openedChat)
+                    {
+                        var table=document.getElementById("MessageTable");
+                        var tr=document.createElement("tr");
+                        var td=document.createElement("td");
+                        var textNode=document.createTextNode(result.message);
+                        td.style.border="none";
+                        td.style.borderRadius="20px";
+                        td.style.backgroundColor=" #f4f6f6";
+                        td.appendChild(textNode);
+                        tr.appendChild(td);
+                        table.appendChild(tr);
+                    }
+                    else
+                    {
+                        document.getElementById("NewMessage"+result.senderName).style.display="block";
+                    }
+                }
+                else
+                {
+                    document.getElementById("NewMessage"+result.senderName).style.display="block";
+                }
+                var tbl=document.getElementById("MessageTable");
+                if(tbl.rows.length>0) tbl.rows[tbl.rows.length-1].scrollIntoView(true);
+            }
+            console.log(result);
+        }
+
+        function userClickHandler(tr,receivername)
+        {
+            return function()
+            {
+                userClicked(tr,receivername);
+            };
+        }
+
+        function userClicked(tr,receiverName)
+        {
+            var table=document.getElementById("AllUsers");
+            document.getElementById("ChatWindow").style.display="block";
+            if(document.getElementById("NewMessage"+receiverName)) document.getElementById("NewMessage"+receiverName).style.display="none";
+            var i=0;
+            for(i=0;i<table.rows.length;i++) table.rows[i].className="table-default";
+            tr.className="table-active";
+            openedChat=receiverName;
+            webSocket.send(username+":"+receiverName);
+        }
+
+        function sendMessage()
+        {
+            message=document.getElementById("MessageBox");
+            var messageBean=new MessageBean();
+            messageBean.senderName=username;
+            messageBean.receiverName=openedChat;
+            messageBean.message=message.value;
+            message.value='';
+            webSocket.send(JSON.stringify(messageBean));
+        }
+        
+        function onClose(response)
+        {
+            console.log("On Close : ");
+        }
+        function onError(response)
+        {
+            console.log("On Error : "+response.data);
+        }
+        function closeConnection()
+        {
+            webSocket.close();
+        }
+        function save()
+        {
+            webSocket.send("Save");
+        }
+        function logout()
+        {
+            webSocket.close();
+            document.getElementById("LogoutSave").style.display="none";
+            document.getElementById("LoggedInUser").style.display="none";
+            document.getElementById("LoginForm").style.display="block";
+            document.getElementById("chatSection").style.display="none";
+        }
+
+        function clearFormInputs()
+        {
+            var usernameInput=document.getElementById("username");
+            var passwordInput=document.getElementById("password");
+            usernameInput.value='';
+            passwordInput.value='';
+            var emailInput=document.getElementById("signupemail");
+            usernameInput=document.getElementById("signupusername");
+            passwordInput=document.getElementById("signuppassword");
+            emailInput.value='';
+            usernameInput.value='';
+            passwordInput.value='';
+        }
+
+        function showSignUpForm()
+        {
+            document.getElementById("SignUpForm").style.display="block";
+            document.getElementById("LoginForm").style.display="none";
+        }
+        function showLoginForm()
+        {
+            document.getElementById("LoginForm").style.display="block";
+            document.getElementById("SignUpForm").style.display="none";
+        }
+
+        function searchUser()
+        {
+            var query=document.getElementById("SearchUser").value;
+            console.log(query);
+        }
+
+    </script>
+    <body>
+        <div id='chatSection' class='container-fluid' style="display: none;">
+            <div class="row" style="height: 82vh ;">
+                <div class="col-3 border-right">
+                    <input id="SearchUser" class="form-control shadow" type='text' oninput="searchUser()" style="border-radius: 20px; margin-top: 10px; margin-bottom: 10px;" placeholder="Search User"/>
+                    <div style="overflow-y: scroll; max-height: 70vh;">
+                        <table class='table' id="AllUsers" style="overflow-y: scroll;">
+                        </table>
+                    </div>
+                </div>
+                <div class="col-9" style="display: none;" id="ChatWindow">
+                    <div>
+                        <table class="table">
+                            <thead class="table table-dark" id="OpenedChat"></thead>
+                        </table>
+                    </div>
+                    <div style="overflow-y:scroll; min-height: 62vh ;max-height: 62vh;">
+                        <table class="table" style="border:none ; border-collapse: separate; border-spacing: 0 10px;" id="MessageTable">
+                        </table>
+                    </div>
+                    <div class="row">
+                        <div class="col-10">
+                            <input class="form-control shadow" id="MessageBox" style="border-radius: 20px; margin-top: 10px; margin-bottom: 10px;"\>
+                        </div>
+                        <div class="col-1">
+                            <button class="btn btn-dark shadow" style="margin: 10px;" onclick="sendMessage()">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="container-fluid" id='LoginForm'>
+            <div class="row align-items-end" style="height: 52vh ;">
+                <form class="col-lg-6 offset-lg-3">
+                    <div class="row justify-content-center">
+                        <input id='username' class="form-control shadow" placeholder="Enter Username" type='text' style="border-radius: 20px;"/><br></br>
+                        <input id='password' type='password' class="form-control shadow" placeholder="Enter Password" style="border-radius: 20px;"/><br></br>
+                        <input class="btn btn-dark shadow" onClick='login()' value="Login" type="button" style="margin: 10px;"/>
+                    </div>
+                </form>
+            </div>
+            <div class="row align-items-center" style="height: 30vh ;">
+                <form class="col-lg-6 offset-lg-3">
+                    <div class="row justify-content-center">
+                        <p>Don't have an account? <a href="#" onClick="showSignUpForm()" class="text-primary">Create Account</a></p>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="container-fluid" id='SignUpForm'  style="display: none;">
+            <div class="row align-items-end" style="height: 52vh ;">
+                <form class="col-lg-6 offset-lg-3">
+                    <div class="row justify-content-center">
+                        <input id='signupemail' class="form-control shadow" placeholder="Enter Email" type='email' style="border-radius: 20px;"/><br></br>
+                        <input id='signupusername' class="form-control shadow" placeholder="Enter Username" type='text' style="border-radius: 20px;"/><br></br>
+                        <input id='signuppassword' type='password' class="form-control shadow" placeholder="Enter Password" style="border-radius: 20px;"/><br></br>
+                        <input class="btn btn-dark shadow" onClick='signup()' value="Sign Up" type="button" style="margin: 10px;"/>
+                    </div>
+                </form>
+            </div>
+            <div class="row align-items-center" style="height: 30vh ;">
+                <form class="col-lg-6 offset-lg-3">
+                    <div class="row justify-content-center">
+                        <p>Already have an account? <a href="#" onClick="showLoginForm()" class="text-primary">Login</a></p>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+
+        <div class='container-fluid' style="background-color: #1d2023; padding-bottom:5px">
+            <footer class="d-flex justify-content-center" style="border-top: solid #1d2023 1px; background-color: #1d2023;">
+                <div class="footer"><p style="color:white">&copy;Sourabh Gome</p></div>
+            </footer>
+        </div>
+    </body>
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    <script src="js/bootstrap.min.js"></script>
+</html>
